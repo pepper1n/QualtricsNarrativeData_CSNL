@@ -1,0 +1,350 @@
+---
+title: "Narrative Qualtrics Data"
+author: "ClaraM"
+date: '2023-01-09'
+output: html_notebook
+---
+
+## IMPORTS
+```{r, }
+# libraries
+library(tidyverse)
+library(rio)
+library(janitor)
+library(csnl)
+
+# raw data
+data_numerical <- import("deidentified_narrative_final_choice_numerical.csv")
+```
+
+
+## CLEANING DATA
+```{r}
+# simplify
+data_clean <- data_numerical %>% 
+  row_to_names(row_number = 1) %>%          # header as column names
+  select(-c(1:22)) %>%                      # getting rid of first 22 columns, metadata
+  filter(!row_number() %in% c(1:8))  %>%    # get rid of first 8 lines of codes
+  mutate_at(-c(1,152), as.numeric) %>%      # numbers to numeric
+  # add_column(reverse = 0) %>%             # adds reverse column; assumes no reverse coding
+  filter(!`Please enter your full name` == "" ) %>% filter(!`Please enter your full name` == "Testing")
+
+# hard code remove repeated entries and scheduling column
+data_clean <- data_clean[-c(24, 38, 66),]
+data_clean <- data_clean[, -255]
+```
+
+---
+Self questions: demographics(2-6), personality-self(7-36), empathy(37-58), self-esteem(59-94), self-efficacy(95-103), social anxiety(104-113), life satisfaction(114-123), depression(124-151)
+Partner questions: relationship length(152), type of relationship(153), closeness(154-155), personality-partner(156-185), PAM(186-199), RCI(200-232), LL(233-245), wire(246-254)
+---
+
+## RENAMING COLUMNS
+```{r}
+## demographic Qs
+colnames(data_clean)[1] <- "subject_id"
+colnames(data_clean)[2] <- "age"
+colnames(data_clean)[3] <- "gender"
+colnames(data_clean)[4] <- "sex"
+colnames(data_clean)[5] <- "race"
+colnames(data_clean)[6] <- "ethnicity"
+
+colnames(data_clean)[152] <- "relationship_length"
+colnames(data_clean)[153] <- "relationship_type"
+
+
+# self Qs
+colnames(data_clean)[7:36] <- c("s_bfi_e_s_1", "s_bfi_a_c_2", "s_bfi_c_o_3", "s_bfi_n_a_4", "s_bfi_o_a_5", "s_bfi_e_a_6", "s_bfi_a_r_7", "s_bfi_c_p_8", "s_bfi_n_d_9", "s_bfi_o_i_10", "s_bfi_e_e_11", "s_bfi_a_t_12", "s_bfi_c_r_13", "s_bfi_n_e_14", "s_bfi_o_c_15", "s_bfi_e_s_16", "s_bfi_a_c_17", "s_bfi_c_o_18", "s_bfi_n_a_19", "s_bfi_o_a_20", "s_bfi_e_a_21", "s_bfi_a_r_22", "s_bfi_c_p_23", "s_bfi_n_d_24", "s_bfi_o_i_25", "s_bfi_e_e_26", "s_bfi_a_t_27", "s_bfi_c_r_28", "s_bfi_n_e_29", "s_bfi_o_c_30")
+colnames(data_clean)[37:58] <- c(paste0("empathy_", 1:22))
+colnames(data_clean)[59:94] <- c(paste0("self_esteem_", 1:36))
+colnames(data_clean)[95:103] <- c(paste0("self_efficacy_", 1:9))
+colnames(data_clean)[104:113] <- c(paste0("social_anxiety_", 1:10))
+colnames(data_clean)[114:123] <- c(paste0("life_satisfaction_", 1:10))
+colnames(data_clean)[124:151] <- c(paste0("depression_", 1:28))
+
+
+# partner Qs
+colnames(data_clean)[154:155] <- c(paste0("rrc_", 1:2))
+colnames(data_clean)[156:185] <- c("o_bfi_e_s_1", "o_bfi_a_c_2", "o_bfi_c_o_3", "o_bfi_n_a_4", "o_bfi_o_a_5", "o_bfi_e_a_6", "o_bfi_a_r_7", "o_bfi_c_p_8", "o_bfi_n_d_9", "o_bfi_o_i_10", "o_bfi_e_e_11", "o_bfi_a_t_12", "o_bfi_c_r_13", "o_bfi_n_e_14", "o_bfi_o_c_15", "o_bfi_e_s_16", "o_bfi_a_c_17", "o_bfi_c_o_18", "o_bfi_n_a_19", "o_bfi_o_a_20", "o_bfi_e_a_21", "o_bfi_a_r_22", "o_bfi_c_p_23", "o_bfi_n_d_24", "o_bfi_o_i_25", "o_bfi_e_e_26", "o_bfi_a_t_27", "o_bfi_c_r_28", "o_bfi_n_e_29", "o_bfi_o_c_30")
+colnames(data_clean)[186:199] <- c(paste0("pam_", 1:14))
+colnames(data_clean)[200:225] <- c(paste0("rci_i_", 1:26))
+colnames(data_clean)[226:232] <- c(paste0("rci_a_", 1:7))
+colnames(data_clean)[233:245] <- c(paste0("ll_", 1:13))
+colnames(data_clean)[246:254] <- c("w_k_1", "w_c_2", "w_s_3", "w_k_4", "w_k_5", "w_c_6", "w_s_7", "w_f_8", "w_l_9")
+```
+
+### REVERSE CODING COLUMNS
+```{r}
+# function that reverses values
+reverse_code <- function(x) {6-x}
+
+# applying function to assessed columns
+data_clean[c('s_bfi_e_s_1', 's_bfi_c_o_3', 's_bfi_a_r_7', 's_bfi_c_p_8', 's_bfi_o_i_10', 's_bfi_n_e_14', 's_bfi_a_c_17', 's_bfi_n_a_19', 's_bfi_o_a_20', 's_bfi_e_a_21', 's_bfi_n_d_24', 's_bfi_e_e_26', 's_bfi_a_t_27', 's_bfi_c_r_28', 's_bfi_o_c_30', 'empathy_3', 'empathy_4', 'empathy_5', 'empathy_7', 'empathy_11', 'empathy_17', 'self_esteem_5', 'self_esteem_6', 'self_esteem_13', 'self_esteem_31', 'life_satisfaction_8', 'o_bfi_e_s_1', 'o_bfi_c_o_3', 'o_bfi_a_r_7', 'o_bfi_c_p_8', 'o_bfi_o_i_10', 'o_bfi_n_e_14', 'o_bfi_a_c_17', 'o_bfi_n_a_19', 'o_bfi_o_a_20', 'o_bfi_e_a_21', 'o_bfi_n_d_24', 'o_bfi_e_e_26', 'o_bfi_a_t_27', 'o_bfi_c_r_28', 'o_bfi_o_c_30', 'pam_6', 'pam_9', 'rci_i_5', 'rci_i_6', 'rci_i_8', 'rci_i_10','rci_i_11', 'rci_i_13', 'rci_i_14', 'rci_i_16', 'rci_i_18', 'rci_i_20', 'rci_i_23', 'rci_i_25')] <- lapply(data_clean[c('s_bfi_e_s_1', 's_bfi_c_o_3', 's_bfi_a_r_7', 's_bfi_c_p_8', 's_bfi_o_i_10', 's_bfi_n_e_14', 's_bfi_a_c_17', 's_bfi_n_a_19', 's_bfi_o_a_20', 's_bfi_e_a_21', 's_bfi_n_d_24', 's_bfi_e_e_26', 's_bfi_a_t_27', 's_bfi_c_r_28', 's_bfi_o_c_30', 'empathy_3', 'empathy_4', 'empathy_5', 'empathy_7', 'empathy_11', 'empathy_17', 'self_esteem_5', 'self_esteem_6', 'self_esteem_13', 'self_esteem_31', 'life_satisfaction_8', 'o_bfi_e_s_1', 'o_bfi_c_o_3', 'o_bfi_a_r_7', 'o_bfi_c_p_8', 'o_bfi_o_i_10', 'o_bfi_n_e_14', 'o_bfi_a_c_17', 'o_bfi_n_a_19', 'o_bfi_o_a_20', 'o_bfi_e_a_21', 'o_bfi_n_d_24', 'o_bfi_e_e_26', 'o_bfi_a_t_27', 'o_bfi_c_r_28', 'o_bfi_o_c_30', 'pam_6', 'pam_9', 'rci_i_5', 'rci_i_6', 'rci_i_8', 'rci_i_10','rci_i_11', 'rci_i_13', 'rci_i_14', 'rci_i_16', 'rci_i_18', 'rci_i_20', 'rci_i_23', 'rci_i_25')], reverse_code)
+```
+
+## SUM COLUMNS FOR QUESTIONS
+```{r}
+
+### SELF ####
+
+## BFI
+# add sum column to be filled 
+data_clean <- add_column(data_clean, s_extraversion_sum = 0, s_openness_sum = 0, s_conscientiousness_sum = 0, s_agreeableness_sum = 0, s_neuroticism_sum = 0, .after = "s_bfi_o_c_30")
+
+# fill sum columns with sum of rows of matching columns
+data_clean$s_extraversion_sum <- rowSums(select(data_clean, matches("s_bfi_e_")))
+data_clean$s_openness_sum <- rowSums(select(data_clean, matches("s_bfi_o_")))
+data_clean$s_conscientiousness_sum <- rowSums(select(data_clean, matches("s_bfi_c_")))
+data_clean$s_agreeableness_sum <- rowSums(select(data_clean, matches("s_bfi_a_")))
+data_clean$s_neuroticism_sum <- rowSums(select(data_clean, matches("s_bfi_n_")))
+
+## OTHER SELF MEASURES
+data_clean <- add_column(data_clean, empathy_sum = 0, .after = "empathy_22")
+data_clean <- add_column(data_clean, self_esteem_sum = 0, .after = "self_esteem_36")
+data_clean <- add_column(data_clean, self_efficacy_sum = 0, .after = "self_efficacy_9")
+data_clean <- add_column(data_clean, social_anxiety_sum = 0, .after = "social_anxiety_10")
+data_clean <- add_column(data_clean, life_satisfaction_sum = 0, .after = "life_satisfaction_10")
+data_clean <- add_column(data_clean, depression_sum = 0, .after = "depression_28")
+
+data_clean$empathy_sum <- rowSums(select(data_clean, matches("empathy_")))
+data_clean$self_esteem_sum <- rowSums(select(data_clean, matches("self_esteem_")))
+data_clean$self_efficacy_sum <- rowSums(select(data_clean, matches("self_efficacy_")))
+data_clean$social_anxiety_sum <- rowSums(select(data_clean, matches("social_anxiety_")))
+data_clean$life_satisfaction_sum <- rowSums(select(data_clean, matches("life_satisfaction_")))
+data_clean$depression_sum <- rowSums(select(data_clean, matches("depression_")))
+
+
+### OTHER ###
+
+## RRC
+data_clean <- add_column(data_clean, rrc_sum = 0, .after = "rrc_2")
+data_clean$rrc_sum <- rowSums(select(data_clean, matches("rrc_")))
+
+## BFI 
+data_clean <- add_column(data_clean, o_extraversion_sum = 0, o_openness_sum = 0, o_conscientiousness_sum = 0, o_agreeableness_sum = 0, o_neuroticism_sum = 0, .after = "o_bfi_o_c_30")
+
+data_clean$o_extraversion_sum <- rowSums(select(data_clean, matches("o_bfi_e_")))
+data_clean$o_openness_sum <- rowSums(select(data_clean, matches("o_bfi_o_")))
+data_clean$o_conscientiousness_sum <- rowSums(select(data_clean, matches("o_bfi_c_")))
+data_clean$o_agreeableness_sum <- rowSums(select(data_clean, matches("o_bfi_a_")))
+data_clean$o_neuroticism_sum <- rowSums(select(data_clean, matches("o_bfi_n_")))
+
+## PAM
+data_clean <- add_column(data_clean, pam_sum = 0, .after = "pam_14")
+data_clean$pam_sum <- rowSums(select(data_clean, matches("pam_")))
+
+## RCI
+data_clean <- add_column(data_clean, rci_i_sum = 0, .after = "rci_i_26")
+data_clean <- add_column(data_clean, rci_a_sum = 0, rci_sum = 0, .after = "rci_a_7")
+
+data_clean$rci_i_sum <- rowSums(select(data_clean, matches("rci_i_")))
+data_clean$rci_a_sum <- rowSums(select(data_clean, matches("rci_a_")))
+data_clean$rci_sum <- rowSums(select(data_clean, matches("rci_")))
+
+## LL
+data_clean <- add_column(data_clean, ll_sum = 0, .after = "ll_13")
+data_clean$ll_sum <- rowSums(select(data_clean, matches("ll_")))
+
+## WIRE 
+data_clean <- add_column(data_clean, wire_sum = 0, .after = "w_l_9")
+data_clean$wire_sum <- rowSums(select(data_clean, matches("w_")))
+```
+
+## RELATIONSHIP LENGTH TO NUMERICAL MONTHS
+```{r}
+# looks for number followed by year/month/week, etc, captures only value
+# does not account for : spelled out numbers, misspelled words
+yrs_relationship_length <- str_match(data_clean$relationship_length, "([0-9]+(?:\\.[0-9]+)?)\\s*(?i)year[s]?")
+months_relationship_length <- str_match(data_clean$relationship_length, "([0-9]+(?:\\.[0-9]+)?)\\s*(?i)month[s]?")
+weeks_relationship_length <- str_match(data_clean$relationship_length, "([0-9]+(?:\\.[0-9]+)?)\\s*(?i)week[s]?")
+
+# NAs to 0s for calculations
+yrs_relationship_length[is.na(yrs_relationship_length)] <- 0
+months_relationship_length[is.na(months_relationship_length)] <- 0
+weeks_relationship_length[is.na(weeks_relationship_length)] <- 0
+
+# calculate years and weeks into months, sum
+data_clean$relationship_length <- as.numeric(yrs_relationship_length[,2])*12 + as.numeric(months_relationship_length[,2]) + as.numeric(weeks_relationship_length[,2])/4
+```
+
+## OUTPUTS
+```{r}
+# pivots code to long format
+data_long <- pivot_longer(data_clean, cols = c(2:ncol(data_clean)), names_to="Questions", values_to = "Values")
+
+# local output
+data_clean
+data_long
+
+# exporting dataframes for analysis
+export(data_long, "NarrativeQualtricsLongData.csv")
+export(data_clean, "NarrativeQualtricsData.csv")
+```
+
+Graph social relationship questions to get an idea of the variation in types of relationships between dyads
+x-> subject id, y -> closeness, color coding by relationship type?? 
+
+subject id to names 
+NOT DONE
+```{r, fig.width=10, fig.height = 4}
+# "1" = "WORK: co-worker", "2" = "WORK: supervisor", "3" = "WORK: subordinate", "4" = "FAMILY: aunt/uncle", "5" = "FAMILY: sibling", "6" = "FAMILY: parent", "7" = "FAMILY: cousin", "8" = "ROMANTIC: married", "9" = "ROMANTIC: engaged", "10" = "ROMANTIC: living together", "11" = "ROMANTIC: exclusive", "12" = "ROMANTIC: non-exclusive", "13" = "FRIENDS: close", "14" = "FRIEND: casual", "15" = "ACQUAINTANCE", "16" = "OTHER"))
+
+closeness_graph <- 
+  ggplot(data_clean, mapping = aes(x = subject_id, y = rci_sum, fill = relationship_type)) +
+  geom_bar(width = .8, position = "dodge", stat = "identity", na.rm = TRUE) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) 
+
+closeness_graph_2 <- 
+  ggplot(data_clean, mapping = aes(x = subject_id, y = ll_sum, fill = relationship_type)) +
+  geom_bar(width = .8, position = "dodge", stat = "identity", na.rm = TRUE) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) 
+
+closeness_graph_3 <- 
+  ggplot(data_clean, mapping = aes(x = subject_id, y = pam_sum, fill = relationship_type)) +
+  geom_bar(width = .8, position = "dodge", stat = "identity", na.rm = TRUE) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) 
+
+closeness_graph
+closeness_graph_2
+closeness_graph_3
+```
+```{r}
+self_sums <- c("Empathy"=list(data_clean$empathy_sum), "Low Self-Esteem"=list(data_clean$self_esteem_sum), "Self-Efficacy"=list(data_clean$self_efficacy_sum), "Social Anxiety"=list(data_clean$social_anxiety_sum), "Life Satisfaction"=list(data_clean$life_satisfaction_sum), "Depression"=list(data_clean$depression_sum))
+
+# figure out how to get rid of inverse graphs
+for (i in 1:length(self_sums)) {
+  x_sum <- self_sums[[i]]
+  x_name <- names(self_sums[i])
+
+  for (j in 1:length(self_sums)) {
+    y_sum <- self_sums[[j]]
+    y_name <- names(self_sums[j])
+    if (identical(x_sum, y_sum) == FALSE) {
+      rcoff <- cor(x_sum,y_sum, use = "complete.obs")
+      graph <- ggplot(data_clean, aes(x=x_sum, y=y_sum)) +
+      geom_point()  +
+      geom_smooth(method=lm) + 
+      labs(x = x_name, y = y_name) 
+      # annotate(geom="text", x=50, y=50, label=rcoff)
+      print(graph)
+      print(sprintf("%s vs. %s: R = %.2f, R^2 = %.2f", x_name, y_name, rcoff, rcoff^2))
+    
+    }
+  }
+}
+```
+
+
+
+
+
+## SPLITTING QUESTIONS AND ADDING SUM COLUMN
+## BAD DON'T USE HAVE TO FIX
+# SELF
+demographics <- data_clean %>%
+  select(1:6) 
+demographics
+
+bfi_self <- data_clean %>%
+  select(7:36) %>% 
+  mutate(total = rowSums(across()))
+bfi_self
+
+empathy <- data_clean %>%
+  select(37:58) %>% 
+  mutate(total = rowSums(across()))
+empathy
+
+self_esteem <- data_clean %>%
+  select(59:94) %>% 
+  mutate(total = rowSums(across()))
+self_esteem
+
+self_efficacy <- data_clean %>%
+  select(95:103) %>% 
+  mutate(total = rowSums(across()))
+self_efficacy
+
+social_anxiety <- data_clean %>%
+  select(104:113) %>% 
+  mutate(total = rowSums(across()))
+social_anxiety
+
+life_satisfaction <- data_clean %>%
+  select(114:123) %>% 
+  mutate(total = rowSums(across()))
+life_satisfaction
+
+depression <- data_clean %>%
+  select(124:151) %>% 
+  mutate(total = rowSums(across()))
+depression
+
+
+# PARTNER
+partner <- data_clean %>%
+  select(c(1,152:155)) 
+partner
+
+relationship_length <- data_clean %>%
+  select(152) 
+relationship_length
+
+relationship_type <- data_clean %>%
+  select(153)
+relationship_type
+
+closeness <- data_clean %>%
+  select(154,155) %>% 
+  mutate(total = rowSums(across()))
+closeness
+
+personality_partner <- data_clean %>%
+  select(156:185) %>% 
+  mutate(total = rowSums(across()))
+personality_partner
+
+# personal acquaintance measure ??
+PAM <- data_clean %>%
+  select(186:199) %>% 
+  mutate(total = rowSums(across()))
+PAM
+
+# relationship closeness inventory?? 
+RCI <- data_clean %>%
+  select(200:232) %>% 
+  mutate(total = rowSums(across()))
+RCI
+
+# loneliness??
+LL <- data_clean %>%
+  select(233:245) %>% 
+  mutate(total = rowSums(across()))
+LL
+
+wire <- data_clean %>%
+  select(246:253) %>% 
+  mutate(total = rowSums(across()))
+wire
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
